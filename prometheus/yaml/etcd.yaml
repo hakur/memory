@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cortex-etcd
+  labels:
+    app: cortex-etcd
+  namespace: monitor
+spec:
+  serviceName: "cortex-etcd"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cortex-etcd
+  template:
+    metadata:
+      labels:
+        app: cortex-etcd
+    spec:
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/ingress"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "io.wise2c.host.exclusive"
+        operator: "Exists"
+        effect: "NoExecute"
+      - key: "io.wise2c.host.exclusive"
+        operator: "Exists"
+        effect: "NoSchedule"
+      # affinity:
+      #   nodeAffinity:
+      #     preferredDuringSchedulingIgnoredDuringExecution:
+      #     - preference:
+      #         matchExpressions:
+      #         - key: kubernetes.io/hostname
+      #           operator: In
+      #           values:
+      #           - "k8s01"
+      #       weight: 10
+      # volumes:
+      # - name: etcd-data
+      #   hostPath:
+      #     path: /data/m3db/etcd
+      containers:
+      - name: etcd
+        image: quay.io/coreos/etcd:v3.4.14
+        command:
+        - "etcd"
+        - "--name"
+        - "$(MY_POD_NAME)"
+        - "--listen-peer-urls"
+        - "http://$(MY_IP):2380"
+        - "--listen-client-urls"
+        - "http://$(MY_IP):2379,http://127.0.0.1:2379"
+        - "--advertise-client-urls"
+        - "http://$(MY_POD_NAME).cortex-etcd:2379"
+        - "--initial-cluster-token"
+        - "cortex-etcd-cluster-1"
+        - "--initial-advertise-peer-urls"
+        - "http://$(MY_POD_NAME).cortex-etcd:2380"
+        - "--initial-cluster"
+        - "cortex-etcd-0=http://cortex-etcd-0.cortex-etcd:2380,cortex-etcd-1=http://cortex-etcd-1.cortex-etcd:2380,cortex-etcd-2=http://cortex-etcd-2.cortex-etcd:2380"
+        - "--initial-cluster-state"
+        - "new"
+        - "--data-dir"
+        - "/var/lib/etcd"
+        ports:
+        - containerPort: 2379
+          name: client
+        - containerPort: 2380
+          name: peer
+        # volumeMounts:
+        # - name: etcd-data
+        #   mountPath: /var/lib/etcd
+        env:
+        - name: MY_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: ETCDCTL_API
+          value: "3"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: cortex-etcd
+  labels:
+    app: cortex-etcd
+  namespace: monitor
+spec:
+  ports:
+  - port: 2379
+    name: client
+  - port: 2380
+    name: peer
+  clusterIP: None
+  selector:
+    app: cortex-etcd
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: cortex-etcd-cluster
+  labels:
+    app: cortex-etcd
+  namespace: monitor
+spec:
+  selector:
+    app: cortex-etcd
+  ports:
+  - port: 2379
+    protocol: TCP
+  type: ClusterIP

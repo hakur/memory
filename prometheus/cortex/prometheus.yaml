@@ -1,0 +1,209 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: prometheus
+  namespace: monitor
+spec:
+  ports:
+  - port: 9090
+    targetPort: 9090
+    nodePort: 32011
+  selector:
+    app: prometheus
+  type: NodePort
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: alertmanager
+  namespace: monitor
+spec:
+  ports:
+  - port: 9093
+    targetPort: 9093
+    nodePort: 32012
+  selector:
+    app: alertmanager
+  type: NodePort
+---
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: prometheus
+  namespace: monitor
+spec:
+  replicas: 2
+  serviceName: prometheus
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      volumes:
+      - name: time
+        hostPath:
+          path: /etc/localtime
+      - name: config
+        configMap:
+          name: prometheus-config
+      - name: shared
+        emptyDir: 
+          sizeLimit: 10Mi
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      - effect: NoExecute
+        key: node.kubernetes.io/not-ready
+        operator: Exists
+        tolerationSeconds: 300
+      - effect: NoExecute
+        key: node.kubernetes.io/unreachable
+        operator: Exists
+        tolerationSeconds: 300
+      # affinity:
+      #   podAntiAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #     - labelSelector:
+      #         matchExpressions:
+      #         - key: app
+      #           operator: In
+      #           values:
+      #           - prometheus
+      #       topologyKey: kubernetes.io/hostname
+      initContainers:
+      - image: centos:7.5.1804 #这个容器主要用于渲染配置文件
+        name: config-render
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        command: 
+        - /bin/sh
+        - -c
+        args:
+        - chmod 777 /etc/prometheus;
+          awk -v POD_NAME=$POD_NAME '{ gsub(/__POD_NAME__/,POD_NAME); print $0 }' /data/prometheus.yaml > /etc/prometheus/prometheus.yaml;
+        volumeMounts:
+        - name: config
+          mountPath: /data
+        - name: shared
+          mountPath: /etc/prometheus
+      containers:
+      - image: prom/prometheus:v2.14.0
+        name: prometheus
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1024Mi
+        volumeMounts:
+        - name: shared
+          mountPath: /etc/prometheus
+        - name: time
+          mountPath: /etc/localtime
+        ports:
+        - containerPort: 9090
+        args:
+        - --config.file=/etc/prometheus/prometheus.yaml
+        - --storage.tsdb.path=/prometheus
+        - --web.enable-lifecycle
+        - --storage.tsdb.retention.time=30m
+---
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: prometheus
+  namespace: monitor
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: prometheus-admin
+  namespace: monitor
+subjects:
+- kind: ServiceAccount
+  name: prometheus
+  namespace: monitor
+  apiGroup: ""
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: ""
+---
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: alertmanager
+  namespace: monitor
+spec:
+  replicas: 3
+  serviceName: alertmanager
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      - effect: NoExecute
+        key: node.kubernetes.io/not-ready
+        operator: Exists
+        tolerationSeconds: 300
+      - effect: NoExecute
+        key: node.kubernetes.io/unreachable
+        operator: Exists
+        tolerationSeconds: 300
+      # affinity:
+      #   podAntiAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #     - labelSelector:
+      #         matchExpressions:
+      #         - key: app
+      #           operator: In
+      #           values:
+      #           - alertmanager
+      #       topologyKey: kubernetes.io/hostname
+      volumes:
+      - name: config
+        configMap:
+          name: alertmanager-conf
+      - name: time
+        hostPath:
+          path: /etc/localtime
+      containers:
+      - image: prom/alertmanager:v0.19.0
+        name: alertmanager
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/alertmanager
+        - name: time
+          mountPath: /etc/localtime
+        ports:
+        - containerPort: 9093
+        - containerPort: 6783
+        args:
+        - --config.file=/etc/alertmanager/config.yaml
+        - --storage.path=/alertmanager
+        - --cluster.listen-address=0.0.0.0:6783
+        - --data.retention=120h
+        - --web.listen-address=:9093
+        - --cluster.peer=alertmanager-0.alertmanager:6783
+        - --cluster.peer=alertmanager-1.alertmanager:6783
+        - --cluster.peer=alertmanager-2.alertmanager:6783
+        # 这是email邮件中的连接地址 如果使用webhook怎无需考虑配置此项
+        # - --web.external-url=http://192.168.0.4:38094/
+        # - --web.route-prefix=/

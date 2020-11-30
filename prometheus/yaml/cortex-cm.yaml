@@ -1,0 +1,53 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: cortex
+data:
+  config.yaml: |
+    limits:
+      max_series_per_metric: 1000000
+      max_series_per_query: 100000000
+    auth_enabled: false
+    server:
+      http_listen_port: 80
+      grpc_server_max_recv_msg_size: 524288000 #500MB
+      grpc_server_max_send_msg_size: 524288000 #500MB
+      grpc_server_max_concurrent_streams: 1000
+      log_level: info
+    distributor:
+      shard_by_all_labels: true
+      pool:
+        health_check_ingesters: true
+    ingester_client:
+      grpc_client_config:
+        max_recv_msg_size: 524288000 #500MB
+        max_send_msg_size: 524288000 #500MB
+        use_gzip_compression: true
+    ingester:
+      lifecycler:
+        join_after: 0
+        final_sleep: 0s
+        num_tokens: 512 #一致性哈希计算落点时所需的toke。表示每个节点放多少个token
+        ring:
+          kvstore:
+            store: etcd
+            etcd:
+              endpoints:
+              - http://cortex-etcd-0.cortex-etcd:2379
+              - http://cortex-etcd-1.cortex-etcd:2379
+              - http://cortex-etcd-2.cortex-etcd:2379
+          replication_factor: 3 #期望多少个ingester实例运行后算作健康,同时表示metric备份副本数，并开始对外服务
+    schema: #ingester运行的时候必须配置的字段
+      configs:
+      - from: 2020-01-12
+        store: boltdb #这里表示要用怎么作为索引存放的后端
+        object_store: filesystem #这里表示要用什么来作为metric数据文件存放的后端
+        schema: v10
+        index:
+          prefix: index_
+          period: 168h
+    storage:
+      boltdb:
+        directory: /cortex/index
+      filesystem:
+        directory: /cortex/chunks

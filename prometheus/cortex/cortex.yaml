@@ -1,0 +1,139 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: cortex
+  namespace: monitor
+data:
+  config.yaml: |
+    limits:
+      max_series_per_metric: 1000000
+      max_series_per_query: 100000000
+    auth_enabled: false
+    server:
+      http_listen_port: 9009
+      grpc_server_max_recv_msg_size: 524288000 #500MB
+      grpc_server_max_send_msg_size: 524288000 #500MB
+      grpc_server_max_concurrent_streams: 1000
+    distributor:
+      shard_by_all_labels: true
+      pool:
+        health_check_ingesters: true
+    ingester_client:
+      grpc_client_config:
+        max_recv_msg_size: 524288000 #500MB
+        max_send_msg_size: 524288000 #500MB
+        use_gzip_compression: true
+    ingester:
+      lifecycler:
+        join_after: 0
+        # claim_on_rollout: false # 配置项已废弃
+        final_sleep: 0s
+        num_tokens: 512 #限流漏桶算法token数量
+        ring:
+          kvstore:
+            store: etcd
+          replication_factor: 1
+    schema:
+      configs:
+      - from: 2020-01-12
+        store: boltdb
+        object_store: filesystem
+        schema: v10
+        index:
+          prefix: index_
+          period: 168h
+    storage:
+      boltdb:
+        directory: /cortex/index
+      filesystem:
+        directory: /cortex/chunks
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: cortex
+  namespace: monitor
+spec:
+  selector:
+    app: cortex
+  ports:
+  - port: 9009
+    targetPort: 9009
+    nodePort: 32014
+  type: NodePort
+---
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: cortex
+  namespace: monitor
+spec:
+  replicas: 3
+  serviceName: cortex
+  selector:
+    matchLabels:
+      app: cortex
+  template:
+    metadata:
+      labels:
+        app: cortex
+    spec:
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/ingress"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "io.wise2c.host.exclusive"
+        operator: "Exists"
+        effect: "NoExecute"
+      - key: "io.wise2c.host.exclusive"
+        operator: "Exists"
+        effect: "NoSchedule"
+      # affinity:
+      #   podAntiAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #     - labelSelector:
+      #         matchExpressions:
+      #         - key: app
+      #           operator: In
+      #           values:
+      #           - prometheus
+      #       topologyKey: kubernetes.io/hostname
+      #   nodeAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #       nodeSelectorTerms:
+      #       - matchExpressions:
+      #         - key: kubernetes.io/hostname
+      #           operator: NotIn
+      #           values:
+      #           - new-public
+      #           - node01
+      volumes:
+      - name: config
+        configMap:
+          name: cortex
+      - name: time
+        hostPath:
+          path: /etc/localtime
+      - name: data
+        emptyDir:
+          sizeLimit: 10Gi
+      containers:
+      - image: quay.io/cortexproject/cortex:v1.6.0
+        name: cortex
+        volumeMounts:
+        - name: config
+          mountPath: /etc/cortex
+        - name: time
+          mountPath: /etc/localtime
+        - name: data
+          mountPath: /cortex
+        args:
+        - -config.file=/etc/cortex/config.yaml
+        - -etcd.endpoints=http://cortex-etcd:2379
+        - -distributor.replication-factor=3
+        # - -distributor.ha-tracker.enable-for-all-users=true
+        # - -distributor.ha-tracker.cluster=environment
+        # - -distributor.ha-tracker.replica=cortex_replica

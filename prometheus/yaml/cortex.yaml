@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cortex-distributor
+spec:
+  selector:
+    matchLabels:
+      app: cortex-distributor
+  template:
+    metadata:
+      labels:
+        app: cortex-distributor
+    spec:
+      containers:
+      - name: distributor
+        image: quay.io/cortexproject/cortex:v1.6.0
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 80
+        args:
+        - -target=distributor
+        - -config.file=/etc/cortex/config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /etc/cortex
+        - name: time
+          mountPath: /etc/localtime
+      volumes:
+      - name: config
+        configMap:
+          name: cortex
+      - name: time
+        hostPath:
+          path: /etc/localtime
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cortex-ingester
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: cortex-ingester
+  template:
+    metadata:
+      labels:
+        app: cortex-ingester
+    spec:
+      containers:
+      - name: ingester
+        image: quay.io/cortexproject/cortex:v1.6.0
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 80
+        args:
+        - -target=ingester
+        - -config.file=/etc/cortex/config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /etc/cortex
+        - name: time
+          mountPath: /etc/localtime
+        - name: data
+          mountPath: /cortex
+      volumes:
+      - name: config
+        configMap:
+          name: cortex
+      - name: time
+        hostPath:
+          path: /etc/localtime
+      - name: data
+        emptyDir:
+          sizeLimit: 10Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cortex-querier
+spec:
+  selector:
+    matchLabels:
+      app: cortex-querier
+  template:
+    metadata:
+      labels:
+        app: cortex-querier
+    spec:
+      containers:
+      - name: querier
+        image: quay.io/cortexproject/cortex:v1.6.0
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 80
+        args:
+        - -target=querier
+        - -config.file=/etc/cortex/config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /etc/cortex
+        - name: time
+          mountPath: /etc/localtime
+      volumes:
+      - name: config
+        configMap:
+          name: cortex
+      - name: time
+        hostPath:
+          path: /etc/localtime
