@@ -1,4 +1,7 @@
-# 
+> ## 简介
+有状态服务器kind: Statefulset 。简写为sts。
+
+属于pod控制器的一种
 
 源码版本以kubernetes v1.19.4为例<br>
 控制器代码位于/pkg/controller/statefulset

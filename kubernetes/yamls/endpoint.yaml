@@ -1,0 +1,13 @@
+kind: Endpoint
+apiVersion: v1
+metadata:
+  name: nginx
+# 如果某个 Endpoints 资源中包含的端点个数超过 1000，则 Kubernetes v1.21 版本 （及更新版本）的集群会将为该 Endpoints 添加注解 endpoints.kubernetes.io/over-capacity: warning。
+# 这一注解表明所影响到的 Endpoints 对象已经超出容量。
+subsets: 
+- addresses:
+  - ip: 192.168.1.200
+  ports:
+  - name: https
+    port: 6443
+    protocol: TCP

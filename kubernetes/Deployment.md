@@ -2,7 +2,9 @@
 > ### 什么是deployment
     是一个高级的pod生命周期控制器，简写 deploy。
     kubectl get deploy -A
+    
     https://kubernetes.io/zh/docs/tasks/run-application/run-stateless-application-deployment/
+    https://kubernetes.io/zh/docs/concepts/workloads/controllers/deployment/
 > ### 为什么需要
 * 因为它会帮自动创建ReplicaSet,简称RS，而RS控制着pod的生命周期。
 * 故障转移，自动创建pod副本数到期望个数

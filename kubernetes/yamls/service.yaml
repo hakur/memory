@@ -1,0 +1,76 @@
+# 无头服务
+kind: Service
+apiVersion: v1
+metadata:
+  name: nginx
+spec:
+  clusterIP: None
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80 # 如果不写这个字段将和port值相同
+---
+
+# 有头服务
+kind: Service
+apiVersion: v1
+metadata:
+  name: nginx
+spec:
+  clusterIP: 10.25.3.100 # 手动申明服务IP地址
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80 # 如果不写这个字段将和port值相同
+
+---
+
+# nodeport服务 ， 特点是会在每一个kube-proxy节点上打开一个NodePort端口
+kind: Service
+apiVersion: v1
+metadata:
+  name: nginx
+spec:
+  clusterIP: 10.25.3.100 # 手动申明服务IP地址，也可以不写这个字段，让k8s自己分配
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80 # 如果不写这个字段将和port值相同
+    nodePort: 32336 # 手动指定每个kube-proxy节点上所要开启的端口号。如果不写这个字段，将自动随机分配一个不冲突的端口号
+  type: NodePort # 类型指明是nodePort
+
+---
+# ExternalName 
+# 类型为 ExternalName 的服务将服务映射到 DNS 名称，而不是典型的选择器，例如 my-service 或者 cassandra。 你可以使用 spec.externalName 参数指定这些服务。
+# 例如，以下 Service 定义将 prod 名称空间中的 my-service 服务映射到 my.database.example.com
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+  namespace: prod
+spec:
+  type: ExternalName
+  externalName: my.database.example.com
+---
+# LoadBalancer
+# 在使用支持外部负载均衡器的云提供商的服务时，设置 type 的值为 "LoadBalancer"， 将为 Service 提供负载均衡器。 
+# 负载均衡器是异步创建的，关于被提供的负载均衡器的信息将会通过 Service 的 status.loadBalancer 字段发布出去。
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+spec:
+  selector:
+    app: MyApp
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 9376
+  clusterIP: 10.0.171.239
+  type: LoadBalancer
+status:
+  loadBalancer:
+    ingress:
+      - ip: 192.0.2.127
+---
+# 如何使用dns 访问外部mysql服务，首先新建一个 mysql的kind: Service，然后再新建一个 mysql的kind: Endpoint,即可完成路由添加
