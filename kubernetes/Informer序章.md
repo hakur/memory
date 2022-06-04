@@ -1,4 +1,4 @@
-> ### 起点 k8s.io/tools/cache/shared_informer.go
+> ### 起点 k8s.io/client-go/tools/cache/shared_informer.go
 * 主要组件
     * 带索引的本地缓存Storage、索引Indexer
     * 控制器Controller：主要是使用ListerWatcher从apiserver拉取资源对象数据和资源变更通知。并推送这些通知到DelatFIFO队列中，并发地把事件弹出DeltaFIFO队列，然后使用sharedIndexInformer::HandleDeltas来处理这些事件。
