@@ -10,7 +10,8 @@ karmadactl init \
 ```
 
 ## 链接
-https://bbs.huaweicloud.com/blogs/349802
+* https://bbs.huaweicloud.com/blogs/349802
+* http://www.sel.zju.edu.cn/blog/2021/09/13/%E4%BB%8Ekarmada-api%E8%A7%92%E5%BA%A6%E5%88%86%E6%9E%90%E5%A4%9A%E4%BA%91%E7%8E%AF%E5%A2%83%E4%B8%8B%E7%9A%84%E5%BA%94%E7%94%A8%E8%B5%84%E6%BA%90%E7%BC%96%E6%8E%92%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0/
 
 ## 是什么？
 华为牵头出品的和kubefed v1 v2 有交流合作的多集群k8s联邦管理系统(联邦控制器)。
@@ -79,13 +80,14 @@ https://bbs.huaweicloud.com/blogs/349802
 
 ## 实现原理
 图片来自官方文档
+
 ![avatar](img/karmada-resource-relation.png)
 
 * #### Resource Template
     对应了联邦概念定义中的Template，用于表示联邦资源，不过和kubefed不同的是，karmada中的联邦资源都是原声k8s yaml，不是像kubefed一样的CRD，这样非常利于部署，没有改造成本。
 
 * #### Propagation Policy
-    传播策略定义了资源下发策略，比如要下发到那个集群中去、
+    传播策略定义了资源下发策略，比如要下发到哪个集群中去、
     ```yaml
     apiVersion: policy.karmada.io/v1alpha1
     kind: PropagationPolicy
@@ -101,7 +103,13 @@ https://bbs.huaweicloud.com/blogs/349802
         clusterNames:
             - member1
     ```
+
+    此外还有一个叫做 ClusterPropagationPolicy 的同级别的东西，和 PropagationPolicy 的区别是， PropagationPolicy 仅用于带namespace的k8s 资源，而 ClusterPropagationPolicy可以用于不带namespace的k8s资源如ClusterRole这种集群级的资源。
+
+* #### ResourceBinding
+    资源绑定，用于描述 Resource Template 和 Propagation Policy 的绑定关系，含有CRD ResourceBinding和ClusterResourceBinding，代码参阅pkg/controllers/binding
 * #### OverridePolicy
+    重写策略定义了将联邦资源下发到各个member集群时要做的定制化处理，比如更改容器镜像的仓库前缀之类的
     ```yaml
     apiVersion: apps/v1
     kind: Deployment
@@ -132,7 +140,30 @@ https://bbs.huaweicloud.com/blogs/349802
             value:
             - --cluster=member1
     ```
+* #### ExecutionSpace
+    执行空间，work控制器，主要是将联邦资源实际地创建到member集群上，如果是push模式则execution space 存在于host集群，如果是pull模式则存在于member集群的agent内。
 
+## 下发工作流程
+![avatar](img/karmada-working.jpg)
+
+## 对象绑定流程
+![avatar](img/object-association-map.drawio.png)
+
+## 跨集群的服务
+条件非常苛刻，需要借助 多集群服务 API（Multi-Cluster Services API），还需要将各个member集群的容器网络打通。可以考虑用rancher的Submariner来完成多集群容器网络打通。 https://github.com/submariner-io/submariner
+
+安装好 MCS https://github.com/kubernetes-sigs/mcs-api 的 ServiceExport and ServiceImport CRD 到每个member集群
+
+参阅 https://github.com/karmada-io/karmada/blob/master/docs/multi-cluster-service.md
+
+## 跨集群的ingress
+条件非常苛刻，需要借助 多集群服务 API（Multi-Cluster Services API），还需要将各个member集群的容器网络打通。可以考虑用rancher的Submariner来完成多集群容器网络打通。 https://github.com/submariner-io/submariner
+
+当使用多集群服务MCS的时候，还需要将host集群和各个member集群的网络打通以方便流量能够互通。
+
+安装好 MCS https://github.com/kubernetes-sigs/mcs-api 的 ServiceExport and ServiceImport CRD 到每个member集群
+
+参阅 https://github.com/karmada-io/karmada/blob/master/docs/multi-cluster-ingress.md
 
 ## 额外
 * ### 多集群一致性？
