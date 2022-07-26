@@ -1,5 +1,7 @@
+```sh
 kubefedctl join docker-desktop --cluster-context docker-desktop \
     --host-cluster-context docker-desktop -v=2
+```
 
 
 ## 介绍

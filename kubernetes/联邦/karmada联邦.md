@@ -1,3 +1,4 @@
+```sh
 karmadactl init \
     --kube-image-mirror-country=cn \
     --etcd-data=/data/kam-etcd \
@@ -6,35 +7,141 @@ karmadactl init \
     --karmada-controller-manager-image=docker.io/karmada/karmada-controller-manager:v1.2.1 \
     --karmada-scheduler-image=docker.io/karmada/karmada-scheduler:v1.2.1 \
     --karmada-webhook-image=docker.io/karmada/karmada-webhook:v1.2.1
+```
+
+## 链接
+https://bbs.huaweicloud.com/blogs/349802
 
 ## 是什么？
-华为出品的和kubefed v1 v2 有交流合作的多集群k8s联邦管理系统。
-上手难度：中等略难受，因为karmada v1.2.1的官网文档不靠谱。有些得自己猜和看源码。
+华为牵头出品的和kubefed v1 v2 有交流合作的多集群k8s联邦管理系统(联邦控制器)。
 
-架构设计？
+上手难度：中等略难受，因为karmada v1.2.1的官网文档不够新。
 
-工作流程？
+* #### 比kubefed强在哪里？
+    * karmada提供k8s原生yaml支持，kubefed有改造成本必须写它的CRD
+    * karmada支持跨集群的HPA水平动态伸缩，kubfed没有提到这个功能
+    * karmada支持用agent方式去控制非公网的k8s集群，kubefed没有提到这种pull的模式，这点在安全性上来说，让联邦的host集群变得危险，因为它需要让agent能连得上联邦集群内的 aggregated apiserver。
 
-push模式？
-karmada直接访问被管集群的apiserver并获取资源状态以及下发集群工作负载资源
-pull模式？
-karmada不在访问被管集群的apiserver，而是由一个运行在每个集群上的karmada agent的pod来负责上报集群状态和接收karmada控制面发来的工作负载
+* #### 架构设计
+    以下内容摘自 https://bbs.huaweicloud.com/blogs/349802 和官方文档
 
-能解决什么问题？
+    ![avatar](img/karmada-architecture.png)
 
-比kubefed强在哪里？
+    11种控制器来支撑联邦资源的下发与监控
 
-多集群一致性？
-    没有保证，只保证资源能够
+    ![avatar](img/karmada-controllers.png)
+
+    * #### Cluster Controller
+        cluster controller主要就是处理Cluster资源对象的逻辑，负责处理Cluster对应需要的关联资源。
+
+    * #### Cluster status controller
+        cluster status controller主要就是处理cluster status资源对象的逻辑，用来收集Cluster的状态，保存到Cluster的status字段中，同步上报到Karmada的控制平面中。
+
+    * #### namespace sync controller
+        namespace sync controller主要就是处理namespace资源对象的逻辑，负责将Karmada控制平面创建的namespace在集群中同步创建出来。
+
+    * #### Resourse Template controller
+        detector模块中包含了通用controller负责resource template的Kubernetes资源对象的调和处理逻辑，以及匹配PropagationPolicy。主要就是处理PropagationPolicy资源对象的逻辑，来派生出资源对象对应的ResourceBinding对象。
+
+    * #### Binding controller
+        binding controller主要就是处理ResourceBinding资源对象的增删改逻辑，ResourceBinding的调和能力是派生出work对象，work对象是和特定集群关联的。一个work只能属于一个集群，代表一个集群的资源对象的模型封装。
+
+    * #### execution controller
+        execution controller主要就是处理Work资源对象的增删改逻辑，用于处理Work，将Work负责的Kubernetes资源对象在对应的集群上创建出来。
+
+    * #### work status controller
+        work status controller主要就是处理Work资源对象的状态逻辑，负责收集Work的状态，也就是Work对应的资源对象的状态，只是这个状态是保存在Work的status字段里的。
+
+    * #### serviceexport controller
+        serviceexport controller主要就是处理serviceexport资源对象的状态逻辑，将需要被其它集群发现的服务暴露出来。
+
+    * #### endpointslice controller
+        endpointslice controller主要根据serviceexport资源对象对应到处的Service，Service对应的endpointslice上报到Karmada的控制面。
+
+    * #### serviceimport controller
+        serviceimport controller主要负责根据ServiceExport暴露出来的Service，在自己负责的集群中创建对应的service，注意service的名称不是完全一样的，同时在自己负责的集群中也创建对应的EndpointSlice，这个EndpointSlice的数据就是来源于EndpointSlice controller中上报到karmada控制平面的EndpointSlice对象，具体是通过在karmada-webhook中给ServiceImport的PropagationPolicy中增加了EndpointSlice的下发能力。
+
+    * #### hpa controller
+        hpa controller主要负责将Karmada控制面中创建的HPA对象通过创建Work的方式下发到对应的集群中。
+
+* ### 特色功能
+    * #### 集群故障转移
+        参阅 https://karmada.io/docs/userguide/failover
+
+        基于host集群karmada-cluster空间内的的租约对象Lease和集群CRD yaml的 .status 字段来判定集群是否不正常，集群租约续期默认10秒一次。
+
+## 通信模式
+![avatar](img/karmada-sync-controller.png)
+* #### push模式
+    karmada直接访问被管集群的apiserver并获取资源状态以及下发集群工作负载资源
+* #### pull模式
+    karmada不再访问被管集群的apiserver，而是由一个运行在每个集群上的karmada agent的pod来负责上报集群状态和接收karmada控制面发来的工作负载,也就是agent去pull和本集群绑定的联邦资源。
+
+## 实现原理
+图片来自官方文档
+![avatar](img/karmada-resource-relation.png)
+
+* #### Resource Template
+    对应了联邦概念定义中的Template，用于表示联邦资源，不过和kubefed不同的是，karmada中的联邦资源都是原声k8s yaml，不是像kubefed一样的CRD，这样非常利于部署，没有改造成本。
+
+* #### Propagation Policy
+    传播策略定义了资源下发策略，比如要下发到那个集群中去、
+    ```yaml
+    apiVersion: policy.karmada.io/v1alpha1
+    kind: PropagationPolicy
+    metadata:
+    name: example-policy # The default namespace is `default`.
+    spec:
+    resourceSelectors:
+        - apiVersion: apps/v1
+        kind: Deployment
+        name: nginx # If no namespace is specified, the namespace is inherited from the parent object scope.
+    placement:
+        clusterAffinity:
+        clusterNames:
+            - member1
+    ```
+* #### OverridePolicy
+    ```yaml
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+    name: myapp
+    ...
+    spec:
+    template:
+        spec:
+        containers:
+            - image: myapp
+            name: myapp
+            command:
+                - ./myapp
+                - --parameter1=foo
+                - --parameter2=bar
+    ---
+    apiVersion: policy.karmada.io/v1alpha1
+    kind: OverridePolicy
+    metadata:
+    name: example
+    spec:
+    ...
+    overriders:
+        commandOverrider:
+        - containerName: myapp
+            operator: add
+            value:
+            - --cluster=member1
+    ```
 
 
-6/3个  ，但是get pod无效 也就是没法看pod状态了，deploy控制器 绝对魔改了 不然不可能支持6/3的写法。 ![avatar](img/karmada-replicas-1.jpg)
+## 额外
+* ### 多集群一致性？
+    没有保证，只保证资源能够6/3个，但是get pod无效 也就是没法看pod状态了，deploy控制器 绝对魔改了 不然不可能支持6/3的写法。
 
+    ![avatar](img/karmada-replicas-1.jpg)
 
-
-
-坑：
-需要禁止CNI配置文件/etc/cni/* 上的ipv6的支持，否则karmada会起不来etcd
-1.CNI不能开IPV6支持，否则karmada的etcd起不来
-2.不能用默认命令行，官网文档在骗人，需要将镜像切换成 docker.io/karmada
-3.不能在docker-destop上搭建，因为docker-desktop 的IP是假的导致无法连接karmada的apiserver
+* ### 坑：
+1. 需要禁止CNI配置文件/etc/cni/* 上的ipv6的支持，否则karmada会起不来etcd
+2. CNI不能开IPV6支持，否则karmada的etcd起不来
+3. 不能用默认命令行，官网文档在骗人，需要将镜像切换成 docker.io/karmada
+4. 不能在docker-destop上搭建，因为docker-desktop 的IP是假的导致无法连接karmada的apiserver
