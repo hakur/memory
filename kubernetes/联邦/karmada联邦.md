@@ -156,6 +156,51 @@ karmadactl init \
 
 参阅 https://github.com/karmada-io/karmada/blob/master/docs/multi-cluster-service.md
 
+* ### ServiceExport
+    * #### 描述
+    定义了将同空间下同名的core v1 Service 暴露为联邦服务的方法。
+
+    https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api#design-details
+
+* ### EndpointSlice
+    * 稳定版本 在k8s v1.21 https://pkg.go.dev/k8s.io/api/discovery/v1#Endpoint
+    * 中文简介 https://blog.51cto.com/u_15127573/4227833
+    * 官方介绍 https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/
+    * #### 描述
+        被设计来解决传统的core/v1 Endpoints 端点过多导致性能问题的情况。增加了如下字段：
+        * hostname 端点名称,自己填，需要全小写以套用为dns路径
+        * zone 集群所处区域字段
+        * node 节点字段
+        * ready pod状态字段，只有pod状态为Ready时EndpointSlice的ready字段才会为true
+        * serving 和ready字段完全相同，当 terminating 字段为true时本字段将消失
+        ```yaml
+        apiVersion: discovery.k8s.io/v1
+        kind: EndpointSlice
+        metadata:
+        name: example-abc
+        labels:
+            kubernetes.io/service-name: example
+        addressType: IPv4
+        ports:
+        - name: http
+            protocol: TCP
+            port: 80
+        endpoints:
+        - addresses:
+            - "10.1.2.3"
+            conditions:
+            ready: true
+            serving: true
+            # terminating: false
+            hostname: pod-1
+            nodeName: node-1
+            zone: us-west2-a
+        ```
+    * #### 大致过程
+        https://github.com/kubernetes-sigs/mcs-api 
+
+        pkg/controllers/service.go 将
+
 ## 跨集群的ingress
 条件非常苛刻，需要借助 多集群服务 API（Multi-Cluster Services API），还需要将各个member集群的容器网络打通。可以考虑用rancher的Submariner来完成多集群容器网络打通。 https://github.com/submariner-io/submariner
 
@@ -167,7 +212,7 @@ karmadactl init \
 
 ## 额外
 * ### 多集群一致性？
-    没有保证，只保证资源能够6/3个，但是get pod无效 也就是没法看pod状态了，deploy控制器 绝对魔改了 不然不可能支持6/3的写法。
+    没有保证，只保证资源能够6/3个，但是get pod无效 也就是没法看pod状态了
 
     ![avatar](img/karmada-replicas-1.jpg)
 
