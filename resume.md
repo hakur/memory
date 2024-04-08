@@ -22,8 +22,8 @@ kubernetes operator development, AWS Cloud (short time)
 * #### Xiamen Fuyun Information Technology Co., Ltd.
     * Job Title: Senior golang engineer 2022.03 - now
     * Job Content
-        * maintenance golang/python/c project
-        * maintenance kuberentes clusters
+        * maintain golang/python/c project
+        * maintain kuberentes clusters
         * write cloud native security scanner software, write ebpf linux kernel monitoringsoftware,
         * write open policy agent risk detector for kuberetes yaml and dockerfile
 * #### Chengdu Lingfang Technology
@@ -31,7 +31,7 @@ kubernetes operator development, AWS Cloud (short time)
     * Job Content
         * design automatic operated mysql and redis clusters based on kubernetes operator
         * plan golang developer’s job content as golang development team leader
-        * make kubernetes lectures for java developer team. Maintenance kubernetes clusters.
+        * make kubernetes lectures for java developer team. maintain kubernetes clusters.
 * #### Beijing Litsoft Technology Co., Ltd.
     * Job Title: Senior golang engineer 2021.01 - 2021.06
     * Job Content
