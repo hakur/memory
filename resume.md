@@ -5,6 +5,7 @@
 * Age: 31
 * Education：Chongqing Institute of Engineering 2011.09 - 2014.06
 * Major：website design and build
+* Phone：+86 173-4592-9030
 * Email：yuxing951@hotmail.com
 * Working Experience：10+ years
 * github: github.com/hakur
@@ -53,10 +54,10 @@ kubernetes operator development, AWS Cloud (short time)
     * Job Content: Lead the web team to complete web system development and containerize web system
 * #### Chengdu RuiShinYuan Technology
     * Job Title: Primary PHP developer 2014.03 - 2014.12
-    * Job Content: Develope with web shop system
+    * Job Content: Develope web shop system
 * #### Chengdu Sobey Digital Technology Co., Ltd.
     * Job Title: Primary PHP developer 2013.09 - 2014.02
-    * Job Content: Develope with Sobey's OTTCMS TV BOX web management backen system
+    * Job Content: Develope Sobey's OTTCMS TV BOX web backen management system
 
 ## Projects
 1. #### Cloud Armor Agent (Xiamen Fuyun Information Technology Co., Ltd.)
